@@ -191,10 +191,10 @@ Some changes will only require we reload the browser:
 - https://github.com/OSC/ondemand/issues
 
 ## Resources:
-Contributing guide: https://github.com/OSC/ondemand/blob/master/CONTRIBUTING.md
-Dev Dashboard Setup: https://github.com/OSC/ondemand/blob/master/DEVELOPMENT.md#developing-the-dashboard
-Development guide: https://github.com/OSC/ondemand/blob/master/DEVELOPMENT.md
-Dockerfile: https://github.com/OSC/ondemand/blob/master/Dockerfile
-Security and Reporting: https://github.com/OSC/ondemand/blob/master/SECURITY.md
-Code of Conduct: https://github.com/OSC/ondemand/blob/master/CODE_OF_CONDUCT.md
-Rails Guides: https://guides.rubyonrails.org/v7.1/
+- Contributing guide: https://github.com/OSC/ondemand/blob/master/CONTRIBUTING.md
+- Dev Dashboard Setup: https://github.com/OSC/ondemand/blob/master/DEVELOPMENT.md#developing-the-dashboard
+- Development guide: https://github.com/OSC/ondemand/blob/master/DEVELOPMENT.md
+- Dockerfile: https://github.com/OSC/ondemand/blob/master/Dockerfile
+- Security and Reporting: https://github.com/OSC/ondemand/blob/master/SECURITY.md
+- Code of Conduct: https://github.com/OSC/ondemand/blob/master/CODE_OF_CONDUCT.md
+- Rails Guides: https://guides.rubyonrails.org/v7.1/
