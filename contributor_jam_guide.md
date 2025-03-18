@@ -80,7 +80,7 @@ OOD ships with 3 types of scientific apps:
 All of these options are what you are setting when you select the `template` in your `submit.yml` files.
 
 ### Clusters
-- The code to work with your clusters and the corresonding cluters config files.
+- The code to work with your clusters and the corresponding cluters config files.
 - https://github.com/OSC/ood_core/tree/master/lib/ood_core
   - Split out between 2 files
   - the `clusters.rb` file is to handle the clusters config files.
@@ -165,14 +165,14 @@ all contained here:
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/lib
 
 ### `batch_connect` convention
-One of the more powerfule and useful abstractions to be aware of in OOD.
+One of the more powerful and useful abstractions to be aware of in OOD.
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/models/batch_connect
 - This model provides most data you see in a session card and when interacting with forms.
 - `helpers` are a big piece of the puzzle here:
   - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/helpers
 
 ## Code Changes
-Now that we've had a break neck tour, let's make changes.
+Now that we've had a breakneck tour, let's make changes.
 
 This portion assumes you have setup a dev dashboard on your OOD instance as described below:
 - https://osc.github.io/ood-documentation/latest/how-tos/app-development/enabling-development-mode.html
