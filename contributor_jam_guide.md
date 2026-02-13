@@ -261,7 +261,7 @@ rserver --www-port ${port} \
 ```
 
 This pattern is incredibly useful for any scientific app that needs authentication or is bundled with authentication, as 
-we can now pass this password to the `view.rb.erb` as well and allow the user to login without ever entering these credentials or even knowing about them:
+we can now pass this password to the `view.html.erb` as well and allow the user to login without ever entering these credentials or even knowing about them:
 ```ruby
 <script type="text/javascript">
 (function () {
