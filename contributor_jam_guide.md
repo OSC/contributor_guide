@@ -26,6 +26,67 @@ The repo:
 
 GH Pages:
 - https://osc.github.io/ood-documentation/master/
+- https://osc.github.io/ood-documentation/latest/
+- https://osc.github.io/ood-documentation/develop/
+
+## Gems
+A Ruby `gem` is just a library or module or bundle of code that we can install using the 
+ruby package manager `bundler`. 
+- The `gem`s are listed in a project's `Gemfile`.
+- After a `bundler` run a `Gemfile.lock` with version dependencies will also be generated.
+- `bundler`: https://bundler.io/
+  - commands: https://bundler.io/docs.html
+  - `bundler config set --local path vendor/bundle` will be your friend later to work on 
+  the development dashboard code and our local `gem`s without polluting the system `gem`s.
+
+OOD has 4 `gem`s itself, some of which can be largely ignored, some which are quite useful:
+- `ood_packaging`: https://rubygems.org/gems/ood_packaging largely for OOD internal team 
+  to help with packaging and distribution of OOD.
+- `ood_appkit`: https://rubygems.org/gems/ood_appkit
+  - Provides an interface to work with OOD scientific apps, a `dataroot` for 
+  OOD apps to write data to and common assets and helper objects.
+- `ood_support`: https://rubygems.org/gems/ood_support
+  - Provides an interface to work with local OS installed on the HPC 
+  center's _web node_. This `gem` is often useful for both OOD and OOD apps.
+- `ood_core`: https://rubygems.org/gems/ood_core
+  - Provides _Adapters_ for _Schedulers_, `batch_connect` _Templates_ for 
+  the 3 types of OOD apps, _ACL_ functionality, cluster interactivity, 
+  and Job interaction.
+
+## OOD Core (ood_core)
+This is where the actual backend code to interact with your clusters or schedulers 
+resides. 
+
+### Schedulers and Adapters
+OOD provides _adapters_ for the various HPC _schedulers_ which can all be seen here:
+- https://github.com/OSC/ood_core/tree/master/lib/ood_core/job/adapters
+- One thing to note is we have k8's adapter if you wish to use k8's as a scheduler.
+- LinuxHost: This adapter is used to mimic a scheduler or resource manager, for remote desktop or IDE's.
+- SystemD: Community contribution.
+
+### 3 Species of OOD App
+OOD ships with 3 types of scientific apps:
+1. `basic`: https://github.com/OSC/ood_core/blob/master/lib/ood_core/batch_connect/templates/basic.rb
+  - HTTP server
+  - e.g. Jupyter Notebook: 
+    - https://github.com/OSC/bc_osc_jupyter/blob/db927470af05c71edac770ae321a1ff399caec33/submit.yml.erb#L39
+2. `vnc`: https://github.com/OSC/ood_core/blob/master/lib/ood_core/batch_connect/templates/vnc.rb
+  - vnc server
+  - e.g. Qomsol, Remote Desktops
+    - https://github.com/OSC/bc_osc_comsol/blob/69667f971076cd2ba2d23bbbdb508bebe20ebc63/submit.yml.erb#L18
+3. `vnc_container`: https://github.com/OSC/ood_core/blob/master/lib/ood_core/batch_connect/templates/vnc_container.rb
+  - Less common, but it exists, vnc with container for sites that don't want to install X11, XFCE, GNOME, etc. on 
+  their host.
+All of these options are what you are setting when you select the `template` in your `submit.yml` files.
+
+### Clusters
+- The code to work with your clusters and the corresponding cluters config files.
+- https://github.com/OSC/ood_core/tree/master/lib/ood_core
+  - Split out between 2 files
+  - the `clusters.rb` file is to handle the clusters config files.
+  - the `clutser.rb` file is to handle working with a cluster and its _scheduler._
+
+## `ood_core` Dev Work
 
 In order for this to work we need to actually touch our `Gemfile` in the `dashboard` and point 
 to our local `ood_core`:
