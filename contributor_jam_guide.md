@@ -256,3 +256,16 @@ Rails.application.routes.draw do
 At the very top are the routes that are always static for a given user, and thus do not require any parameters to generate their pages. 
 For example, 'projects/possible_imports' detects projects that you can access based upon your UNIX group and shared space configurations, and does not have to be connected to an individual project.
 
+Next, we have the line `resources :projects do`, which starts a block that contains the rest of the snippet.
+The line is an example of [Rails Resource Routing](https://guides.rubyonrails.org/routing.html#resource-routing-the-rails-default), a shortcut that automatically defines some common routes for a given entity.
+Each route defined within this block automatically receives a `/:project/` parameter at the start of their url, meaning they are defined for each project that a user has access to.
+
+Finally, the `resources :workflows do` and `resources :launchers do` lines serve the same function as `resources :projects`, defining basic routes and containing a block of routes that require both a `:project` 
+parameter and a `:workflow` or `:launcher` parameter respectively, defining these routes for each workflow or launcher that a project contains.
+
+### Controllers
+Each **route** defined above directs the request parameters to a method on a **controller** in order to render that page or perform that action. For some routes, the controller action is explicitly defined while 
+others do so implicitly. For example, the line `post '/jobs/:cluster/:jobid/stop' => 'projects#stop_job', :as => 'stop_job'` explicitly points the url to `projects#stop_job`, which Rails interprets as the `stop_job`
+method defined on `ProjectsController`.
+On the other hand, the line `post 'submit'` does not contain a url or a controller action in the definition. For this route, Rails uses both the `resources :projects do` and `resources :workflows do` blocks containing
+the route to generate the url fragment `/:project/:workflow/submit` and direct this to the `submit` method on `WorkflowsController`. 
