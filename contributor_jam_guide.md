@@ -198,3 +198,61 @@ Some changes will only require we reload the browser:
 - Security and Reporting: https://github.com/OSC/ondemand/blob/master/SECURITY.md
 - Code of Conduct: https://github.com/OSC/ondemand/blob/master/CODE_OF_CONDUCT.md
 - Rails Guides: https://guides.rubyonrails.org/v7.1/
+
+
+# Deep Dives
+
+## Model View Controller in the Project Manager
+
+For a practical example of the MVC paradigm in action, we can take a closer look at the Project Manager. 
+Although the Project Manager is a single component, it is composed of three different entities: Projects, Launchers, and Workflows.
+Each of these entities have their own model, view, and controller, but interact with one another to manage their relationships and data.
+
+### Relationships
+The basic relationships necessary for a working project are
+- A User has many Projects
+- A Project has many Launchers
+- A Project has many Workflows
+- A Workflow has many Launchers
+
+In a typical web app, these relationships would be defined in a database schema. However the OnDemand dashboard does not use a database, instead managing
+its data through the filesystem. So where do these relationships 'live'? The first time these come up is during **routing**. 
+```rb
+# apps/dashboard/config/routes.rb
+
+Rails.application.routes.draw do
+  if Configuration.can_access_projects?
+    get 'projects/possible_imports' => 'projects#possible_imports', :as => 'project_possible_imports'
+    post 'projects/import' => 'projects#import_save', :as => 'project_import_save'
+
+
+    resources :projects do
+      root 'projects#index'
+      get '/jobs/:cluster/:jobid' => 'projects#job_details', :defaults => { :format => 'turbo_stream' }, :as => 'job_details'
+      delete '/jobs/:cluster/:jobid' => 'projects#delete_job', :as => 'delete_job'
+      post '/jobs/:cluster/:jobid/stop' => 'projects#stop_job', :as => 'stop_job'
+
+
+      resources :workflows do
+        member do
+          post 'submit'
+          post 'save'
+          get 'load'
+          get 'clone'
+        end
+      end
+
+
+      resources :launchers do
+        post 'submit', on: :member
+        post 'save', on: :member
+        get 'render_button', on: :member
+        get 'clone', on: :member
+      end
+    end
+  end
+```
+
+At the very top are the routes that are always static for a given user, and thus do not require any parameters to generate their pages. 
+For example, 'projects/possible_imports' detects projects that you can access based upon your UNIX group and shared space configurations, and does not have to be connected to an individual project.
+
