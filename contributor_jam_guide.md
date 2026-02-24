@@ -271,8 +271,9 @@ On the other hand, the line `post 'submit'` does not contain a url or a controll
 the route to generate the url fragment `/:project/:workflow/submit` and direct this to the `submit` method on `WorkflowsController`. 
 
 Following a submit request to WorkflowsController#submit, we see
-```
+```rb
 # apps/dashboard/app/controllers/workflows_controller.rb
+
   def submit
     return unless load_project_and_workflow_objects(render_json: true)
     metadata = metadata_params(permit_json_data)
