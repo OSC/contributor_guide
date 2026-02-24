@@ -376,3 +376,40 @@ That `hidden_class` class variable is then added to each element on the page tha
 In the controller and view snippets above, we saw how they identify and store the relevant models (`@project`, `@workflow`, `@launchers`), and how they call methods on these models to determine behavior. 
 In the controller case with `Workflows#submit`, we see it use the result of `@workflow.submit(submit_param)` to determine whether to return a success response or a failure response.
 In the view, it calls `@workflow.editable?` to determine whether a class is included in certain elements, and by extension, which elements appear on the page.
+
+This is the primary function of models, to manage data and provide endpoints for the controllers and views to interact with this data.
+In particular, models are helpful because they isolate the logic and complexity in a single class, allowing us to keep the controllers and views as simple as possible.
+```rb
+# apps/dashboard/app/models/workflow.rb
+
+  def manifest_file
+    Workflow.workflow_dir(@project_dir).join("#{@id}.yml")
+  end
+
+  def update(attributes, override = false)
+    update_attrs(attributes, override)
+    return false unless valid?(:update)
+
+    save_manifest(:update)
+  end
+
+  def update_attrs(attributes, override = false)
+    [:name, :description, :launcher_ids, :metadata].each do |attribute|
+      next unless override || attributes.key?(attribute)
+      instance_variable_set("@#{attribute}".to_sym, attributes.fetch(attribute, ''))
+    end
+  end
+
+  def editable?
+    manifest_file.writable? || !shared?(manifest_file)
+  end
+```
+In this small snippet, we get a good overview of what a basic model contains
+- `manifest_file` constructs a path where workflow settings are saved as YAML
+- `update` is directly used in WorkflowsController to modify workflow settings
+- `update_attrs` is an internal method that facilitates the modification
+- `editable?` reads the state of the manifest file to determine if the user has permission to overwrite it.
+
+The biggest advantage of MVC is it allows us to independently develop our models, views, and controllers.
+This means that as long as the `update` and `editable?` methods continue to exist on the Workflow model, 
+we can update the underlying logic (like what makes a workflow 'editable') in a single place, while its interactions (like hiding certain elements when it is not) remain the same. 
