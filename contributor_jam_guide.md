@@ -269,3 +269,77 @@ others do so implicitly. For example, the line `post '/jobs/:cluster/:jobid/stop
 method defined on `ProjectsController`.
 On the other hand, the line `post 'submit'` does not contain a url or a controller action in the definition. For this route, Rails uses both the `resources :projects do` and `resources :workflows do` blocks containing
 the route to generate the url fragment `/:project/:workflow/submit` and direct this to the `submit` method on `WorkflowsController`. 
+
+Following a submit request to WorkflowsController#submit, we see
+```
+# apps/dashboard/app/controllers/workflows_controller.rb
+  def submit
+    return unless load_project_and_workflow_objects(render_json: true)
+    metadata = metadata_params(permit_json_data)
+    @workflow.update(metadata)
+    submit_param = Workflow.build_submit_params(metadata, project_directory)
+    result = @workflow.submit(submit_param)
+    if !result.nil?
+      render json: { message: I18n.t('dashboard.jobs_workflow_submitted'), job_hash: result }
+    else
+      msg = I18n.t('dashboard.jobs_workflow_failed', error: @workflow.collect_errors)
+      render json: { message: msg }, status: :unprocessable_entity
+    end
+  end
+
+  private
+
+  def load_project_and_workflow_objects(render_json: false)
+    @project = Project.find(project_id)
+    @workflow = Workflow.find(workflow_id, project_directory)
+    return true if @workflow.present?
+    
+    if render_json
+      render json: { message: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id) }, status: :not_found
+    else 
+      redirect_to project_path(project_id), notice: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id)
+    end
+    false
+  end
+
+  def index_params
+    params.permit(:project_id).to_h.symbolize_keys
+  end
+
+  def project_id
+    params.permit(:project_id)[:project_id]
+  end
+
+  def workflow_id
+    params.require(:id)
+  end
+```
+Notice that **controller actions** are always public methods, and everything under the `private` flag is used within actions, but is not an action itself.
+Starting from the top of `submit`, we see the order in which the logic is executed.
+- Fetch project and workflow objects based on request parameters
+- Fetch metadata from request parameters
+- Update the workflow object with metadata
+- Create scheduler parameters from workflow object
+- Submit scheduler parameters and collect response
+- Return a JSON response stating success or failure.
+
+While it is a bit hard to see in the code above, all the parameters included with the request must be accessed through the `params` object, which is available everywhere in the controller.
+In this case, since `Workflows#submit` corresponds to an action, not a page, we just send back a JSON response that is rendered by the page the user is currently on (`Workflows#show` in this example).
+
+As we see with `Workflows#submit`, not all controller actions correspond to views. For an example that does render a view at the end, consider the action for `Workflows#show`.
+```rb
+  def show
+    return unless load_project_and_workflow_objects
+    launcher_ids = @workflow.launcher_ids
+
+    @launchers = Launcher.all(project_directory).select { |l| launcher_ids.include?(l.id) }
+  end
+```
+
+Following line-by-line again we see
+- Project and workflow objects fetched with the same private method as above
+- Workflow provides a list of launchers it 'has'
+- List of ids from workflow is compared with the launcher objects in the projects
+- List of actual launcher objects is stored in `@launchers` 
+
+
