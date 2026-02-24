@@ -343,4 +343,36 @@ Following line-by-line again we see
 - List of ids from workflow is compared with the launcher objects in the projects
 - List of actual launcher objects is stored in `@launchers` 
 
+We can tell that it returns a standard HTML view response because there is no explicit `render` line like we saw above in `submit`.
 
+### Views
+To find the specific view file used by the `show` action, we look for `show.html.erb` in `apps/dashboard/app/views/workflows/`. 
+```erb
+# apps/dashboard/app/views/workflows/show.html.erb
+
+<%= javascript_include_tag 'workflows', nonce: true, defer: true %>
+
+<input type="hidden" id="project-id" value="<%= @project.id %>">
+<input type="hidden" id="workflow-id" value="<%= @workflow.id %>">
+<input type="hidden" id="base-workflow-url" value="<%= project_workflow_path(@project.id, @workflow.id) %>">
+<input type="hidden" id="base-launcher-url" value="<%= project_launchers_path(@project.id) %>">
+
+<div id="workflows_app">
+  <div class="toolbar" aria-label="toolbar">
+    <% hidden_class = @workflow.editable? ? '' : 'd-none' %>
+    <%= select_tag "select_launcher", options_from_collection_for_select(@launchers, :id, :title), include_blank: false, class: "form-control w-25 #{hidden_class}" %>
+    <button id="btn-add" class="<%= hidden_class %>">Add Launcher</button>
+```
+In this small snippet, we can see the view using the model objects we stored in variables in `Workflows#show`. 
+The top few lines with `type="hidden"` pass relevant data to javascript, like ids and url paths specific to the project and workflow, and further down we see the `@launchers` variable being used to seed a select input.
+All of the helper methods seen here, like `project_workflow_path` or `options_from_collection_for_select`, are built-in Rails helpers. See [Action View Helpers](https://guides.rubyonrails.org/action_view_helpers.html) and [Action View Form Helpers](https://guides.rubyonrails.org/form_helpers.html) for an overview of the built-in helpers available in every view.
+
+We can also see from this snippet how Rails views use ERB, or Embedded Ruby. 
+For example the line `<% hidden_class = @workflow.editable? ? '' : 'd-none' %>` contains a line of ruby code that stores a string in the `hidden_class` variable, based on the `editable?` method in the Workflow model. 
+That `hidden_class` class variable is then added to each element on the page that we want to hide if `@workflow.editable? == false`.
+
+### Models
+
+In the controller and view snippets above, we saw how they identify and store the relevant models (`@project`, `@workflow`, `@launchers`), and how they call methods on these models to determine behavior. 
+In the controller case with `Workflows#submit`, we see it use the result of `@workflow.submit(submit_param)` to determine whether to return a success response or a failure response.
+In the view, it calls `@workflow.editable?` to determine whether a class is included in certain elements, and by extension, which elements appear on the page.
