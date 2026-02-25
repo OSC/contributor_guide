@@ -137,7 +137,9 @@ OOD uses the MVC pattern of web-development which is default in `rails`.
 - Rails philosophy is *convention over configuration*.
 
 We can see the OOD conventions by looking at the various `Models`, 
-`Controllers` and `Views` within the `rails` code itself.
+`Controllers` and `Views` within the `rails` code itself. For a 
+detailed walkthrough of MVC in OOD, see 
+[MVC in the Project Manager](#model-view-controller-in-the-project-manager).
 
 ### Models
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/models
