@@ -137,7 +137,9 @@ OOD uses the MVC pattern of web-development which is default in `rails`.
 - Rails philosophy is *convention over configuration*.
 
 We can see the OOD conventions by looking at the various `Models`, 
-`Controllers` and `Views` within the `rails` code itself.
+`Controllers` and `Views` within the `rails` code itself. For a 
+detailed walkthrough of MVC in OOD, see 
+[MVC in the Project Manager](#model-view-controller-in-the-project-manager).
 
 ### Models
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/models
@@ -198,3 +200,218 @@ Some changes will only require we reload the browser:
 - Security and Reporting: https://github.com/OSC/ondemand/blob/master/SECURITY.md
 - Code of Conduct: https://github.com/OSC/ondemand/blob/master/CODE_OF_CONDUCT.md
 - Rails Guides: https://guides.rubyonrails.org/v7.1/
+
+
+# Deep Dives
+
+## Model View Controller in the Project Manager
+
+For a practical example of the MVC paradigm in action, we can take a closer look at the Project Manager. 
+Although the Project Manager is a single component, it is composed of three different entities: Projects, Launchers, and Workflows.
+Each of these entities have their own model, view, and controller, but interact with one another to manage their relationships and data.
+
+### Relationships
+The basic relationships necessary for a working project are
+- A User has many Projects
+- A Project has many Launchers
+- A Project has many Workflows
+- A Workflow has many Launchers
+
+In a typical web app, these relationships would be defined in a database schema. However the OnDemand dashboard does not use a database, instead managing
+its data through the filesystem. So where do these relationships 'live'? The first time these come up is during **routing**. 
+```rb
+# apps/dashboard/config/routes.rb
+
+Rails.application.routes.draw do
+  if Configuration.can_access_projects?
+    get 'projects/possible_imports' => 'projects#possible_imports', :as => 'project_possible_imports'
+    post 'projects/import' => 'projects#import_save', :as => 'project_import_save'
+
+
+    resources :projects do
+      root 'projects#index'
+      get '/jobs/:cluster/:jobid' => 'projects#job_details', :defaults => { :format => 'turbo_stream' }, :as => 'job_details'
+      delete '/jobs/:cluster/:jobid' => 'projects#delete_job', :as => 'delete_job'
+      post '/jobs/:cluster/:jobid/stop' => 'projects#stop_job', :as => 'stop_job'
+
+
+      resources :workflows do
+        member do
+          post 'submit'
+          post 'save'
+          get 'load'
+          get 'clone'
+        end
+      end
+
+
+      resources :launchers do
+        post 'submit', on: :member
+        post 'save', on: :member
+        get 'render_button', on: :member
+        get 'clone', on: :member
+      end
+    end
+  end
+```
+
+At the very top are the routes that are always static for a given user, and thus do not require any parameters to generate their pages. 
+For example, 'projects/possible_imports' detects projects that you can access based upon your UNIX group and shared space configurations, and does not have to be connected to an individual project.
+
+Next, we have the line `resources :projects do`, which starts a block that contains the rest of the snippet.
+The line is an example of [Rails Resource Routing](https://guides.rubyonrails.org/routing.html#resource-routing-the-rails-default), a shortcut that automatically defines some common routes for a given entity.
+Each route defined within this block automatically receives a `/:project/` parameter at the start of their url, meaning they are defined for each project that a user has access to.
+
+Finally, the `resources :workflows do` and `resources :launchers do` lines serve the same function as `resources :projects`, defining basic routes and containing a block of routes that require both a `:project` 
+parameter and a `:workflow` or `:launcher` parameter respectively, defining these routes for each workflow or launcher that a project contains.
+
+### Controllers
+Each **route** defined above directs the request parameters to a method on a **controller** in order to render that page or perform that action. For some routes, the controller action is explicitly defined while 
+others do so implicitly. For example, the line `post '/jobs/:cluster/:jobid/stop' => 'projects#stop_job', :as => 'stop_job'` explicitly points the url to `projects#stop_job`, which Rails interprets as the `stop_job`
+method defined on `ProjectsController`.
+On the other hand, the line `post 'submit'` does not contain a url or a controller action in the definition. For this route, Rails uses both the `resources :projects do` and `resources :workflows do` blocks containing
+the route to generate the url fragment `/:project/:workflow/submit` and direct this to the `submit` method on `WorkflowsController`. 
+
+Following a submit request to WorkflowsController#submit, we see
+```rb
+# apps/dashboard/app/controllers/workflows_controller.rb
+
+  def submit
+    return unless load_project_and_workflow_objects(render_json: true)
+    metadata = metadata_params(permit_json_data)
+    @workflow.update(metadata)
+    submit_param = Workflow.build_submit_params(metadata, project_directory)
+    result = @workflow.submit(submit_param)
+    if !result.nil?
+      render json: { message: I18n.t('dashboard.jobs_workflow_submitted'), job_hash: result }
+    else
+      msg = I18n.t('dashboard.jobs_workflow_failed', error: @workflow.collect_errors)
+      render json: { message: msg }, status: :unprocessable_entity
+    end
+  end
+
+  private
+
+  def load_project_and_workflow_objects(render_json: false)
+    @project = Project.find(project_id)
+    @workflow = Workflow.find(workflow_id, project_directory)
+    return true if @workflow.present?
+    
+    if render_json
+      render json: { message: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id) }, status: :not_found
+    else 
+      redirect_to project_path(project_id), notice: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id)
+    end
+    false
+  end
+
+  def index_params
+    params.permit(:project_id).to_h.symbolize_keys
+  end
+
+  def project_id
+    params.permit(:project_id)[:project_id]
+  end
+
+  def workflow_id
+    params.require(:id)
+  end
+```
+Notice that **controller actions** are always public methods, and everything under the `private` flag is used within actions, but is not an action itself.
+Starting from the top of `submit`, we see the order in which the logic is executed.
+- Fetch project and workflow objects based on request parameters
+- Fetch metadata from request parameters
+- Update the workflow object with metadata
+- Create scheduler parameters from workflow object
+- Submit scheduler parameters and collect response
+- Return a JSON response stating success or failure.
+
+While it is a bit hard to see in the code above, all the parameters included with the request must be accessed through the `params` object, which is available everywhere in the controller.
+In this case, since `Workflows#submit` corresponds to an action, not a page, we just send back a JSON response that is rendered by the page the user is currently on (`Workflows#show` in this example).
+
+As we see with `Workflows#submit`, not all controller actions correspond to views. For an example that does render a view at the end, consider the action for `Workflows#show`.
+```rb
+  def show
+    return unless load_project_and_workflow_objects
+    launcher_ids = @workflow.launcher_ids
+
+    @launchers = Launcher.all(project_directory).select { |l| launcher_ids.include?(l.id) }
+  end
+```
+
+Following line-by-line again we see
+- Project and workflow objects fetched with the same private method as above
+- Workflow provides a list of launchers it 'has'
+- List of ids from workflow is compared with the launcher objects in the projects
+- List of actual launcher objects is stored in `@launchers` 
+
+We can tell that it returns a standard HTML view response because there is no explicit `render` line like we saw above in `submit`.
+
+### Views
+To find the specific view file used by the `show` action, we look for `show.html.erb` in `apps/dashboard/app/views/workflows/`. 
+```erb
+# apps/dashboard/app/views/workflows/show.html.erb
+
+<%= javascript_include_tag 'workflows', nonce: true, defer: true %>
+
+<input type="hidden" id="project-id" value="<%= @project.id %>">
+<input type="hidden" id="workflow-id" value="<%= @workflow.id %>">
+<input type="hidden" id="base-workflow-url" value="<%= project_workflow_path(@project.id, @workflow.id) %>">
+<input type="hidden" id="base-launcher-url" value="<%= project_launchers_path(@project.id) %>">
+
+<div id="workflows_app">
+  <div class="toolbar" aria-label="toolbar">
+    <% hidden_class = @workflow.editable? ? '' : 'd-none' %>
+    <%= select_tag "select_launcher", options_from_collection_for_select(@launchers, :id, :title), include_blank: false, class: "form-control w-25 #{hidden_class}" %>
+    <button id="btn-add" class="<%= hidden_class %>">Add Launcher</button>
+```
+In this small snippet, we can see the view using the model objects we stored in variables in `Workflows#show`. 
+The top few lines with `type="hidden"` pass relevant data to javascript, like ids and url paths specific to the project and workflow, and further down we see the `@launchers` variable being used to seed a select input.
+All of the helper methods seen here, like `project_workflow_path` or `options_from_collection_for_select`, are built-in Rails helpers. See [Action View Helpers](https://guides.rubyonrails.org/action_view_helpers.html) and [Action View Form Helpers](https://guides.rubyonrails.org/form_helpers.html) for an overview of the built-in helpers available in every view.
+
+We can also see from this snippet how Rails views use ERB, or Embedded Ruby. 
+For example the line `<% hidden_class = @workflow.editable? ? '' : 'd-none' %>` contains a line of ruby code that stores a string in the `hidden_class` variable, based on the `editable?` method in the Workflow model. 
+That `hidden_class` class variable is then added to each element on the page that we want to hide if `@workflow.editable? == false`.
+
+### Models
+
+In the controller and view snippets above, we saw how they identify and store the relevant models (`@project`, `@workflow`, `@launchers`), and how they call methods on these models to determine behavior. 
+In the controller case with `Workflows#submit`, we see it use the result of `@workflow.submit(submit_param)` to determine whether to return a success response or a failure response.
+In the view, it calls `@workflow.editable?` to determine whether a class is included in certain elements, and by extension, which elements appear on the page.
+
+This is the primary function of models, to manage data and provide endpoints for the controllers and views to interact with this data.
+In particular, models are helpful because they isolate the logic and complexity in a single class, allowing us to keep the controllers and views as simple as possible.
+```rb
+# apps/dashboard/app/models/workflow.rb
+
+  def manifest_file
+    Workflow.workflow_dir(@project_dir).join("#{@id}.yml")
+  end
+
+  def update(attributes, override = false)
+    update_attrs(attributes, override)
+    return false unless valid?(:update)
+
+    save_manifest(:update)
+  end
+
+  def update_attrs(attributes, override = false)
+    [:name, :description, :launcher_ids, :metadata].each do |attribute|
+      next unless override || attributes.key?(attribute)
+      instance_variable_set("@#{attribute}".to_sym, attributes.fetch(attribute, ''))
+    end
+  end
+
+  def editable?
+    manifest_file.writable? || !shared?(manifest_file)
+  end
+```
+In this small snippet, we get a good overview of what a basic model contains
+- `manifest_file` constructs a path where workflow settings are saved as YAML
+- `update` is directly used in WorkflowsController to modify workflow settings
+- `update_attrs` is an internal method that facilitates the modification
+- `editable?` reads the state of the manifest file to determine if the user has permission to overwrite it.
+
+The biggest advantage of MVC is it allows us to independently develop our models, views, and controllers.
+This means that as long as the `update` and `editable?` methods continue to exist on the Workflow model, 
+we can update the underlying logic (like what makes a workflow 'editable') in a single place, while its interactions (like hiding certain elements when it is not) remain the same. 
