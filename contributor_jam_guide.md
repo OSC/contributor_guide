@@ -87,6 +87,7 @@ All of these options are what you are setting when you select the `template` in 
   - the `clutser.rb` file is to handle working with a cluster and its _scheduler._
 
 ## `ood_core` Dev Work
+
 In order for this to work we need to actually touch our `Gemfile` in the `dashboard` and point 
 to our local `ood_core`:
 ```Gemfile
@@ -95,8 +96,281 @@ gem 'ood_core', :path=> '/full/path/to/checked/out/ood_core'
 - You must issue the `bin/setup` command to rebuild your `dashboard` once you make these local changes to your 
 `ood_core` code.
 
-### OOD Core PR
+## Scientific App Development and OOD Features
 
+Now that we've seen the docs and how to edit them, here's a few places in the docs that will be a huge benefit to  you and 
+your center for OOD scientific app development.
+
+### The `batch_connect` Convention Overview
+
+One of OOD's most powerful abstractions for interactive app development that will help you develop your apps with 
+faster time to compute.
+
+**Scientific App File Structure:**
+```
+my_app/
+├── `form.yml.erb`      ← User-facing form
+├── `manifest.yml`      ← App metadata
+├── `connection.yml`    ← App server data needed on frontend (logins, hostnames, etc.)
+├── `submit.yml.erb`    ← Job submission params
+└── `template/`
+    ├── `before.sh.erb`  ← Pre-launch setup
+    ├── `script.sh.erb`  ← Main launch script
+    └── `after.sh.erb`   ← Cleanup (Run at the end of the session)
+```
+
+**Execution Flow:**
+1. `form.yml.erb` — Renders form → user fills it out
+2. `submit.yml.erb` — Generates job submission config
+3. `before.sh.erb` — Runs before main script
+4. `script.sh.erb` — Launches the application
+5. `after.sh.erb` — Cleanup when _session_ ends (_Not_ when the job ends)
+
+- Docs: https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive.html
+- Helpers source: https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/helpers
+
+### The ERB objects
+
+OOD uses Ruby for its backend language and a templating engine called `ERB` which stands for **"Embedded Ruby"**
+- Notice, we can use this to generate or read data on the backend. 
+- This pattern prevalent in most apps you pull down from OSC and you can know which files use this convention by looking for file names that 
+end in `*.erb` such as `script.sh.erb` or `form.yml.erb`, all that matters to `ERB` is that file extension name which 
+then tells the templating engine to uptake that file and execute the ruby code found in the file betweem tse `ERB` tags. 
+- The engine will either then return a string in place of the expression, or it will render as blank ultimately but provide a ruby 
+statement for a variable or branching logic or some type of code you need to run but wish to not actually return anything in the file itself.
+
+Ruby `ERB` code runs between these tags in OOD:
+```erb
+<%= ruby_expression %>    <%- ruby_statement -%>
+```
+Notice the `=` in one expression and the `-` in the statement. This is _crucial_ to working with `ERB` code to understand:
+- When you need the `ERB` to render an actual string in the file, use `=` as seen beginning `ruby_expression` above.
+- If you don't want an actual string returned, such as for a variable you or logic, use the `-` as seen around `ruby_statement` above.
+
+ERB gives your app scripts access to **two powerful Ruby objects** that OOD populates for you:
+- `session` — Info about the running session (job ID, `cluster`, `host`, etc.)
+- `context` — The form values the user submitted
+
+#### The `context` Object
+
+The `context` object gives you access to every form field the user filled out on the backend using `ERB` in your `*.erb` files.
+
+Every field in your `form:` array becomes a method on `context`. This is a powerful and promoted pattern in OOD that will save you 
+a lot of time in your app development.
+
+Given a `form.yml` like:
+```yaml
+form:
+  - bc_num_hours
+  - bc_num_slots
+  - bc_account
+  - bc_queue
+  - version
+  - auto_modules_app
+```
+
+You can access any of those fields in your `script.sh.erb` by using `ERB` and calling the set attribute on `context`:
+```bash
+# Access any form field:
+<%= context.version %>
+<%= context.bc_num_hours %>
+<%= context.bc_account %>
+<%= context.bc_queue %>
+
+# Use in conditionals:
+<%- if context.version == "4.3" -%>
+  module load R/4.3
+<%- end -%>
+```
+
+#### The `session` Object
+
+The `session` object provides runtime information about the current batch connect session.
+
+| Attribute              | What it gives you                              |
+|------------------------|------------------------------------------------|
+| `session.id`           | Unique session identifier                      |
+| `session.job_id`       | The scheduler job ID                           |
+| `session.cluster`      | Name of the cluster (matches cluster configs)  |
+| `session.staged_root`  | Path to the session's staged directory          |
+| `session.created_at`   | When the session was created                   |
+
+```bash
+# Example: Kubernetes-aware logic
+<%- if session.cluster =~ /kubernetes/ -%>
+  # K8s-specific setup here
+<%- end -%>
+```
+
+### Helper Methods: Stop Reinventing the Wheel!
+
+OOD provides helper methods that we see users reinvent all the time. **Use these instead!**
+
+#### `find_port`
+
+Finds an available port on the compute node. No need to hardcode or guess.
+```bash
+# In script.sh.erb:
+port=$(find_port ${host})
+export port
+```
+
+#### `create_passwd`
+
+Generates a secure random password of the given length. Great for app auth.
+```bash
+# In script.sh.erb:
+password="$(create_passwd 16)"
+export RSTUDIO_PASSWORD="${password}"
+```
+
+### Common Useful Patterns
+
+#### `connection.yml` entry
+
+Suppose we have an app that wants to use its own auth mechanism. OOD would 
+not be aware of this password which gets generated and it could create a 
+complex work around in order to retrieve this data to share with OOD.
+
+Well OOD has a pattern for this! We use the `connection.yml` and the 
+`conn_params` in the `submit.yml.erb` file in conjunction with the app's 
+`view.html.erb` file to generate this data, plug it in for the user, and never 
+expose the credentials or involve sharing of those credentials.
+
+We will use RStudio to show this pattern off, and to notice that this app 
+needs a `csrf` token to launch, another quirk you may find in apps that 
+we can handle with this pattern.
+
+How this works is we use the `before.sh.erb` script to generate this needed 
+`password` and `csrf_token` for our app:
+```bash
+# rstudio 1.4+ needs a csrf token
+csrf_token=<%= SecureRandom.uuid %>
+# Define a password and export it for RStudio authentication
+password="$(create_passwd 16)"
+
+export RSTUDIO_PASSWORD="${password}"
+```
+Note that we used a lowercase variable for `password` here, this is a 
+necessary convention that you _must_ follow for this pattern to work.
+
+Next, we need to ensure we have the `csrf_token` for our app when it is 
+submitted to the cluster using the `submit.yml.erb` like so:
+```yaml
+---
+batch_connect:
+  template: "basic"
+  conn_params:
+    - csrf_token
+...
+```
+This is awesome! We've generated the token and shared it with our job as it 
+is spun up.
+
+Now, let's combine all this together in the `view.html.erb` to see how we then 
+put all this data into our app's session card when it's ready:
+```html
+<script type="text/javascript">
+(function () {
+  let date = new Date();
+  date.setTime(date.getTime() + (7*24*60*60*1000));
+  let expires = "expires=" + date.toUTCString();
+  let cookiePath = "path=/rnode/" + "<%= host.to_s %>" + "/" + "<%= port.to_s %>/";
+  /**
+    rstuido wants a cookie called csrf-token - but that's going to change in 2020!
+  */
+  let cookie = `csrf-token=<%= csrf_token %>;${expires};${cookiePath};SameSite=strict;secure`;
+  document.cookie = cookie;
+})();
+</script>
+
+<form action="/rnode/<%= host %>/<%= port %>/auth-do-sign-in" method="post" target="_blank">
+  <input type="hidden" name="csrf-token" value="<%= csrf_token %>"/>
+  <input type="hidden" name="username" value="<%= ENV["USER"] %>">
+  <input type="hidden" name="password" value="<%= password %>">
+  <input type="hidden" name="staySignedIn" value="1">
+  <input type="hidden" name="appUri" value="">
+  <button class="btn btn-primary" type="submit">
+    <i class="fa fa-registered"></i> Connect to RStudio Server
+  </button>
+</form>
+```
+This provides and hides a few pieces of data for the user to connect:
+- the `csrf` token: `<input type="hidden" name="csrf-token" value="<%= csrf_token %>"/>`
+- the `password` we made: `<input type="hidden" name="password" value="<%= password %>">`
+- the username needed: `<input type="hidden" name="username" value="<%= ENV["USER"] %>">`
+
+You can see from this that all the work of usernames, passwords, and other data can all 
+be handled from OOD and shared between the app's files in a way to make the 
+user's experience seamless and free of login pop-ups. 
+
+#### Kubernetes-Aware Branching
+
+A very common pattern you'll see in apps that need to support both traditional HPC schedulers and Kubernetes:
+```bash
+<%- if context.cluster =~ /kubernetes/ -%>
+  source /bin/find_host_port       # K8s port assignment
+  source /bin/save_passwd_as_secret # Store password securely
+  host="$HOST_CFG"
+  port="$PORT_CFG"
+<%- else -%>
+  port=$(find_port ${host})         # Traditional HPC
+  password="$(create_passwd 16)"    # Generate password
+<%- end -%>
+```
+
+#### Dynamic Forms with `form.yml.erb`
+
+You can use `ERB` in your form definition to dynamically populate dropdowns from the filesystem:
+```yaml
+# form.yml.erb — use ERB to make forms dynamic!
+attributes:
+  version:
+    widget: select
+    options:
+      <%- Dir.glob('/software/R/*/').each do |d| -%>
+      - ["<%= File.basename(d) %>", "<%= File.basename(d) %>"]
+      <%- end -%>
+```
+
+#### Putting It All Together: `before.sh.erb` and the `script.sh.erb`
+
+Here's a complete example showing `context`, `find_port`, and `create_passwd` working together using the 
+`before.sh.erb` script and the `script.sh.erb`.
+
+We need to generate our data for the script before it runs using the `before.sh.erb` pattern that OOD provides:
+```bash
+# Set up networking — use OOD's helpers!
+export host=$(hostname)
+export port=$(find_port ${host})
+
+# Generate secure auth
+export password="$(create_passwd 16)"
+export RSTUDIO_PASSWORD="${password}"
+
+```
+Now we can use these variables we've set in our `script.sh.erb` like below:
+
+```bash
+#!/usr/bin/env bash
+
+# Load modules based on user's form selection (context)
+module load rstudio/<%= context.version %>
+
+# Write connection info for OOD to read
+echo "Starting RStudio on ${host}:${port}"
+
+# Launch the application
+rserver --www-port ${port} \
+        --auth-none 0 \
+        --auth-pam-helper-path /usr/lib/rstudio-server/bin/pam-helper \
+        --server-data-dir /tmp/rstudio-data
+```
+
+These patterns are incredibly useful for any scientific app that needs to share data between the backend and 
+the session card. And as we saw in the `connection.yml` pattern above, we can take this further by passing the 
+data through to the `view.html.erb` giving users a seamless login experience, like never seeing a password prompt 
+for example.
 
 ## OOD Monorepo
 Open OnDemand follows the _Mono-repo_ pattern. What this means is that OOD has many 
