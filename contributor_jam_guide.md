@@ -3,15 +3,15 @@ This guide attempts to layout structures and locations around much of
 the OOD ecosystem. 
 
 These structures range from types such as github repos, to ruby `gem`s, 
-and even to components of OOD itself wrt its codebase.
+and even to components of OOD itself and its codebase.
 
-If you hear a term you don't know, please ask it in Menti!
+If you hear a term you don't know, please ask it in Menti or open an issue in https://github.com/OSC/ood-documentation/issues to have it added to the glossary below!
   - https://osc.github.io/ood-documentation/latest/glossary.html
 
 ## Pull Requests
 You need to make a fork of the repo first:
 - https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo
-- Generally you are working off the `latest` branch when you begin your work.
+- Generally you are working off the `latest` or `master` branch when you begin your work.
 - Edit on GitHub button also works too!
 
 ## OOD Documentation
@@ -21,8 +21,10 @@ The repo:
 - https://github.com/OSC/ood-documentation
 - Notice the repo has many branches but `latest` and `develop` are the 2 which matter 
   because they generate GitHub Pages which serve the documentation for the community.
-- Branch off `latest` and push to `develop` for *feautures not implemented*.
-- For *typos and fixes*, push your branch back to `latest`.
+- Branch off `latest` and push to `develop` for *unreleased features*. These changes
+  are periodically merged into `latest` before each major or minor release.
+- For *typos and fixes*, push your branch back to `latest`. This ensures that these
+  changes take effect immediately.
 
 GH Pages:
 - https://osc.github.io/ood-documentation/master/
@@ -33,11 +35,14 @@ GH Pages:
 A Ruby `gem` is just a library or module or bundle of code that we can install using the 
 ruby package manager `bundler`. 
 - The `gem`s are listed in a project's `Gemfile`.
-- After a `bundler` run a `Gemfile.lock` with version dependencies will also be generated.
+- `bundler` will automatically generate a `Gemfile.lock` with exact versions and dependencies.
 - `bundler`: https://bundler.io/
   - commands: https://bundler.io/docs.html
   - `bundler config set --local path vendor/bundle` will be your friend later to work on 
   the development dashboard code and our local `gem`s without polluting the system `gem`s.
+  - After configuring bundler, `bundle install` executed in the same directory as the `Gemfile`
+  will install the gems and generate the `Gemfile.lock`. Note that you rarely need to manually
+  execute this command in the dashboard, as it is executed as part of the `bin/setup` script.
 
 OOD has 4 `gem`s itself, some of which can be largely ignored, some which are quite useful:
 - `ood_packaging`: https://rubygems.org/gems/ood_packaging largely for OOD internal team 
@@ -83,18 +88,17 @@ All of these options are what you are setting when you select the `template` in 
 - The code to work with your clusters and the corresponding cluters config files.
 - https://github.com/OSC/ood_core/tree/master/lib/ood_core
   - Split out between 2 files
-  - the `clusters.rb` file is to handle the clusters config files.
-  - the `clutser.rb` file is to handle working with a cluster and its _scheduler._
+  - the [`clusters.rb`](https://github.com/OSC/ood_core/blob/master/lib/ood_core/clusters.rb) file handles the clusters config files.
+  - the [`cluster.rb`](https://github.com/OSC/ood_core/blob/master/lib/ood_core/cluster.rb) file handles working with a cluster and its _scheduler._
 
-## `ood_core` Dev Work
-
+## `ood_core` Development
 In order for this to work we need to actually touch our `Gemfile` in the `dashboard` and point 
 to our local `ood_core`:
 ```Gemfile
 gem 'ood_core', :path=> '/full/path/to/checked/out/ood_core'
 ```
-- You must issue the `bin/setup` command to rebuild your `dashboard` once you make these local changes to your 
-`ood_core` code.
+- You must issue the `bin/setup` command to rebuild your `dashboard` after you make the edit to your `Gemfile`,
+  and again each time you make local changes to your `ood_core` code.
 
 ## Scientific App Development and OOD Features
 
@@ -135,7 +139,7 @@ OOD uses Ruby for its backend language and a templating engine called `ERB` whic
 - Notice, we can use this to generate or read data on the backend. 
 - This pattern prevalent in most apps you pull down from OSC and you can know which files use this convention by looking for file names that 
 end in `*.erb` such as `script.sh.erb` or `form.yml.erb`, all that matters to `ERB` is that file extension name which 
-then tells the templating engine to uptake that file and execute the ruby code found in the file betweem tse `ERB` tags. 
+then tells the templating engine to uptake that file and execute the ruby code found in the file between the `ERB` tags. 
 - The engine will either then return a string in place of the expression, or it will render as blank ultimately but provide a ruby 
 statement for a variable or branching logic or some type of code you need to run but wish to not actually return anything in the file itself.
 
@@ -417,22 +421,26 @@ detailed walkthrough of MVC in OOD, see
 
 ### Models
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/models
-- All the data OOD is aware of is defined in this directory.
+- Represent generic objects like files, projects, or apps, and handle 
+  all the data OOD is aware of.
 
 ### Controllers
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/controllers
-- Here we see what data the model can present to a view.
+- These define how the models are used for each page, and what data is passed
+  along to the views.
 
 ### Views
 - https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/views
 - This directory can be daunting as it contains all code used to present the data 
-to users. As such, there can be a great many components to any piece of OOD.
+to users. As such, there can be a great many components to any individual page of OOD.
   - e.g. https://github.com/OSC/ondemand/tree/master/apps/dashboard/app/views/batch_connect
-  - While this is one of the more complex views to deal with, it gives a sense of how complex 
+  - While this is one of the more complex views to deal with, it gives a sense of how sophisticated 
   some of these files can become.
-  - The goal for these when working is to try and make things _modular_ and _logical_.
+  - The goal when constructing views is to try and make things _modular_ and _logical_.
   - Rails also uses the notion of *partials* to provide components of views.
     - These files start with an underscore `_my_partial`.
+    - They are most commonly used for _repeated_ elements, like the path selector, but can
+      also help to organize individual pieces of complex components.
     - https://osc.github.io/ood-documentation/latest/customizations.html#overriding-pages
 
 ### Utilities
