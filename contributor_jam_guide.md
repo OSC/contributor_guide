@@ -483,6 +483,29 @@ Some changes will only require we reload the browser:
 - Code of Conduct: https://github.com/OSC/ondemand/blob/master/CODE_OF_CONDUCT.md
 - Rails Guides: https://guides.rubyonrails.org/v7.1/
 
+# Open OnDemand Contributor Guide
+## Set up your development environment
+We introduce two simple ways to set up your OOD development environment: set up a sandbox and set up an OOD Docker container.  
+### Set up a sandbox for app development
+If you have access to an Open OnDemand portal, the easiest way to set up your development environment is to open a sandbox. 
+
+**Note:** Before you can use the OOD sandbox development environment, it must be enabled by the OOD administrator. This mode allows you to create and test custom web applications directly from your home directory in an isolated space. Contact your OOD adminstrator if you don't see the "Develop" menu after step 1.  
+
+1. Create the Development Folder: If you don't see the "Develop" menu in your dashboard, you typically need to create a specific directory in your terminal to signal the system:
+
+```{bash}
+mkdir -p ~/ondemand/dev
+```
+
+2. Open the Dashboard: Log in to the Open OnDemand portal.
+
+3. Navigate to Sandbox: In the top navigation bar, click the "Develop" menu and select "My Sandbox Apps (Development)".
+
+<img src="sandbox.png" width="50%">
+
+4. Launch Your App: From this page, you can see a list of applications currently in your ~/ondemand/dev folder. Click Launch next to an app to start its session in a new tab.
+
+### Set up an OOD Docker container for app development
 
 # Deep Dives
 
