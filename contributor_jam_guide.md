@@ -584,7 +584,7 @@ attributes:
 form:
   - project
 ```   
-### Predefined initializers
+### Predefined attributes
 There are several automatic predefined [attributes](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/form.html#automatic-predefined-attributes) that dynamically populate form fields with system values such as clusters, queues, accounts, and software modules. Simply add the attribute name to the form: list in your form.yml.erb file.
 ```{ruby}
 # /var/www/ood/apps/sys/myapp/form.yml.erb
